@@ -19,5 +19,8 @@ upload: setup
 bootstrap:
 	python3 -m pip install --user --upgrade setuptools wheel twine
 
+clean:
+	rm -rf schecker.egg-info build dist
+
 really-clean:
 	git clean -fdx
