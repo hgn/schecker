@@ -19,6 +19,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
+        export DEBIAN_FRONTEND=noninteractive
         sudo apt-get install -y -q  clang
         sudo apt-get install -y -q  clang-tidy coccinelle
         #python -m pip install --upgrade pip
