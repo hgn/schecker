@@ -19,6 +19,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
+        sudo apt list clang-tidy
         sudo apt-get install clang-tidy coccinelle
         #python -m pip install --upgrade pip
         #pip install -r requirements.txt
