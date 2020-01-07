@@ -89,9 +89,11 @@ class ModCoccinelle:
 
 class Schecker:
 
-    def __init__(self, directories: List[str], coccinelle_script_dirs: List[str] = list(),
+    def __init__(self, directories: List[str], excludes: List[str] = list(),
+                 coccinelle_script_dirs: List[str] = list(),
                  modules_disabled: List[str] = list()) -> None:
         self._directories = directories
+        self._excludes = excludes
         self._coccinelle_script_dirs = coccinelle_script_dirs
         self._modules_disabled = modules_disabled
         self._init_modules()
@@ -117,18 +119,20 @@ class Schecker:
         with open(path, 'a') as fd:
             fd.write(message)
 
-    def check(self):
-        buf = io.StringIO()
+    def check(self, io_object):
         for relpath, fullpath in self._each_file():
             for module in self._modules:
+                yield fullpath
                 stdout = module.execute(relpath, fullpath)
                 if len(stdout) <= 0:
                     continue
-                buf.write(stdout)
+                io_object.write(stdout)
                 self.account_warning(relpath, stdout)
-        return buf.getvalue()
 
-    def _is_blacklisted(self, path):
+    def _is_excluded(self, path):
+        for exclude in self._excludes:
+            if exclude in path:
+                return True
         return False
 
     def _each_file(self):
@@ -137,7 +141,7 @@ class Schecker:
             for path, dirs, files in os.walk(rootdir):
                 for file_ in files:
                     full_path = os.path.join(path, file_)
-                    if self._is_blacklisted(full_path):
+                    if self._is_excluded(full_path):
                         continue
                     file_suffix = os.path.splitext(file_)[1]
                     if file_suffix not in COCCIN_SUFFIX:
@@ -162,7 +166,13 @@ def execute(command: str, shell: bool = True, cwd: Optional[str] = None,
 
 
 if __name__ == "__main__":
+    buf = io.StringIO()
     path = ['../botan/src/']
-    path = ['.']
+    #path = ['.']
     scripts = ['schecker/tests/cocci-scripts/']
-    Schecker(path, scripts).check()
+
+    schecker = Schecker(path, scripts)
+
+    list(schecker.check(buf))
+
+    print(buf.getvalue())
