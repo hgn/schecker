@@ -121,13 +121,16 @@ class Schecker:
 
     def check(self, io_object):
         for relpath, fullpath in self._each_file():
+            yield fullpath
             for module in self._modules:
-                yield fullpath
                 stdout = module.execute(relpath, fullpath)
                 if len(stdout) <= 0:
                     continue
                 io_object.write(stdout)
                 self.account_warning(relpath, stdout)
+
+    def check_all(self, io_object):
+        list(self.check(io_object))
 
     def _is_excluded(self, path):
         for exclude in self._excludes:
@@ -167,12 +170,13 @@ def execute(command: str, shell: bool = True, cwd: Optional[str] = None,
 
 if __name__ == "__main__":
     buf = io.StringIO()
-    path = ['../botan/src/']
-    #path = ['.']
+    paths = ['.', '../botan/src/']
+    excludes = ['fuzzer', 'tests/test']
     scripts = ['schecker/tests/cocci-scripts/']
 
-    schecker = Schecker(path, scripts)
+    schecker = Schecker(paths, excludes=excludes, coccinelle_script_dirs=scripts)
 
-    list(schecker.check(buf))
+    for filename in schecker.check(buf):
+        print('check {}'.format(filename))
 
     print(buf.getvalue())
