@@ -18,10 +18,10 @@ from typing import List
 from typing import Dict
 from typing import Optional
 
-class CoccinCheckError(Exception): pass
-class InitializationCocci(CoccinCheckError): pass
+class ScheckerError(Exception): pass
 
-COCCIN_SUFFIX = ['.c', '.cpp', '.cc']
+# Default file extension, can be replaced by extension()
+FILE_EXTENSION = ['.c', '.C', '.cpp', '.cxx', '.cc', '.c++' ]
 
 TIDY_CHECKS  = '-checks=-\*'
 TIDY_CHECKS += ',clang-analyzer-\*'
@@ -36,7 +36,7 @@ TIDY_CHECKS += ',performance-\*'
 TIDY_CHECKS += ',readability-\*'
 TIDY_CHECKS += ',-clang-diagnostic-error'
 
-INFO_PATH = 'checker-warnings'
+DEFAULT_OUTPUT_DIR = 'schecker-results'
 
 class ModClangTidy:
 
@@ -45,7 +45,7 @@ class ModClangTidy:
 
     def _check_environment(self):
         if not shutil.which('clang-tidy'):
-            raise CoccinCheckError('clang-tidy not installed or callable, please install clang-tidy')
+            raise ScheckerError('clang-tidy not installed or callable, please install clang-tidy')
 
     def execute(self, relpath, fullpath):
         cmd =  'clang-tidy {} {}'.format(TIDY_CHECKS, fullpath)
@@ -72,10 +72,9 @@ class ModCoccinelle:
                     full_path = os.path.normpath(os.path.abspath(full_path))
                     self._scripts.append(full_path)
 
-
     def _check_environment(self):
         if not shutil.which('spatch'):
-            raise CoccinCheckError('spatch not installed or callable, please install clang-tidy')
+            raise ScheckerError('spatch not installed or callable, please install clang-tidy')
 
     def execute(self, relpath, fullpath):
         buf = ''
@@ -90,14 +89,23 @@ class ModCoccinelle:
 class Schecker:
 
     def __init__(self, directories: List[str], excludes: List[str] = list(),
+                 outdir: str = DEFAULT_OUTPUT_DIR,
                  coccinelle_script_dirs: List[str] = list(),
                  modules_disabled: List[str] = list()) -> None:
         self._directories = directories
         self._excludes = excludes
+        self._outdir = outdir
         self._coccinelle_script_dirs = coccinelle_script_dirs
         self._modules_disabled = modules_disabled
+        self._init_system()
+
+    def _init_system(self):
         self._init_modules()
+        self._init_default_extensions()
         self._init_directories()
+
+    def _init_default_extensions(self):
+        self._extensions = FILE_EXTENSION
 
     def _init_modules(self):
         self._modules = list()
@@ -108,29 +116,18 @@ class Schecker:
 
     def _init_directories(self):
         if not self._directories:
-            raise CoccinCheckError('argument for analyzed directories is empty')
-        if os.path.exists(INFO_PATH):
-            shutil.rmtree(INFO_PATH)
+            raise ScheckerError('argument for analyzed directories is empty')
+        if self._outdir and os.path.exists(self._outdir):
+            shutil.rmtree(self._outdir)
 
-    def account_warning(self, relpath, message):
-        path = os.path.join(INFO_PATH, relpath)
+    def _account_warning(self, relpath, message):
+        if not self._outdir:
+            return
+        path = os.path.join(self._outdir, relpath)
         dirpath = os.path.dirname(path)
         os.makedirs(dirpath, exist_ok=True)
         with open(path, 'a') as fd:
             fd.write(message)
-
-    def check(self, io_object):
-        for relpath, fullpath in self._each_file():
-            yield fullpath
-            for module in self._modules:
-                stdout = module.execute(relpath, fullpath)
-                if len(stdout) <= 0:
-                    continue
-                io_object.write(stdout)
-                self.account_warning(relpath, stdout)
-
-    def check_all(self, io_object):
-        list(self.check(io_object))
 
     def _is_excluded(self, path):
         for exclude in self._excludes:
@@ -147,10 +144,31 @@ class Schecker:
                     if self._is_excluded(full_path):
                         continue
                     file_suffix = os.path.splitext(file_)[1]
-                    if file_suffix not in COCCIN_SUFFIX:
+                    if file_suffix not in self._extensions:
                         continue
                     rel_path = full_path[len(rootdir) + 1:]
                     yield rel_path, full_path
+
+    @property
+    def extensions(self) -> List[str]:
+        return self._extensions
+
+    @extensions.setter
+    def extensions(self, value : List[str]) -> None:
+        self._extensions = value
+
+    def check(self, io_object):
+        for relpath, fullpath in self._each_file():
+            yield fullpath
+            for module in self._modules:
+                stdout = module.execute(relpath, fullpath)
+                if len(stdout) <= 0:
+                    continue
+                io_object.write(stdout)
+                self._account_warning(relpath, stdout)
+
+    def check_all(self, io_object):
+        list(self.check(io_object))
 
 
 
