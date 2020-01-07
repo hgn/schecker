@@ -12,7 +12,8 @@ class TestStringMethods(unittest.TestCase):
 
 
     def test_return_code_true(self):
-        self.assertTrue(True)
+        paths = ['.', '../botan/src/']
+        self.assertTrue(schecker.Schecker(paths))
 
 
 if __name__ == '__main__':

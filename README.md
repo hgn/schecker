@@ -16,8 +16,12 @@ import schecker
 
 paths = [ './path/to/your/c/project' ]
 excludes = [ './path/to/your/c/project/third-party' ]
+scripts = ['schecker/tests/cocci-scripts/']
 
-schecker = schecker.Schecker(paths, excludes=excludes, coccinelle_script_dirs=scripts)
+schecker = schecker.Schecker(paths, excludes=excludes)
+schecker.options_coccinelle(script_dirs=scripts)
+
+# now start the actual test, this may take some time
 schecker.check_all(sys.stderr)
 ```
 
