@@ -56,14 +56,17 @@ class ModClangTidy:
 
 class ModCoccinelle:
 
-    def __init__(self, coccinelle_script_dirs: List[str] = list()):
-        self._coccinelle_script_dirs = coccinelle_script_dirs
-        self._load_scripts()
+    def __init__(self):
         self._check_environment()
+        self._scripts = list()
+
+    def script_dirs(self, script_dirs: List[str]):
+        self._script_dirs = script_dirs
+        self._load_scripts()
 
     def _load_scripts(self):
         self._scripts = list()
-        for rootdir in self._coccinelle_script_dirs:
+        for rootdir in self._script_dirs:
             for path, dirs, files in os.walk(rootdir):
                 for file_ in files:
                     full_path = os.path.join(path, file_)
@@ -90,14 +93,17 @@ class Schecker:
 
     def __init__(self, directories: List[str], excludes: List[str] = list(),
                  outdir: str = DEFAULT_OUTPUT_DIR,
-                 coccinelle_script_dirs: List[str] = list(),
                  modules_disabled: List[str] = list()) -> None:
         self._directories = directories
         self._excludes = excludes
         self._outdir = outdir
-        self._coccinelle_script_dirs = coccinelle_script_dirs
         self._modules_disabled = modules_disabled
         self._init_system()
+
+    def options_coccinelle(self, script_dirs: List[str] = list()):
+        self._options_coccinelle_script_dirs = script_dirs
+        self._modules['coccinelle'].module.script_dirs(self._options_coccinelle_script_dirs)
+
 
     def _init_system(self):
         self._init_modules()
@@ -108,11 +114,13 @@ class Schecker:
         self._extensions = FILE_EXTENSION
 
     def _init_modules(self):
-        self._modules = list()
+        self._modules = dict()
         if 'coccinelle' not in self._modules_disabled:
-            self._modules.append(ModCoccinelle(self._coccinelle_script_dirs))
+            self._modules['coccinelle'] = types.SimpleNamespace()
+            self._modules['coccinelle'].module = ModCoccinelle()
         if 'clang-tidy' not in self._modules_disabled:
-            self._modules.append(ModClangTidy())
+            self._modules['clang-tidy'] = types.SimpleNamespace()
+            self._modules['clang-tidy'].module = ModClangTidy()
 
     def _init_directories(self):
         if not self._directories:
@@ -140,12 +148,15 @@ class Schecker:
             rootdir = os.path.normpath(os.path.abspath(rootdir))
             for path, dirs, files in os.walk(rootdir):
                 for file_ in files:
+                    # if file is within exclude list, if so: skip
                     full_path = os.path.join(path, file_)
                     if self._is_excluded(full_path):
                         continue
+                    # if file a valid file (ends of .c, .cpp)?
                     file_suffix = os.path.splitext(file_)[1]
                     if file_suffix not in self._extensions:
                         continue
+                    # valid! return this path (and rel path)
                     rel_path = full_path[len(rootdir) + 1:]
                     yield rel_path, full_path
 
@@ -160,8 +171,8 @@ class Schecker:
     def check(self, io_object):
         for relpath, fullpath in self._each_file():
             yield fullpath
-            for module in self._modules:
-                stdout = module.execute(relpath, fullpath)
+            for module_name, module in self._modules.items():
+                stdout = module.module.execute(relpath, fullpath)
                 if len(stdout) <= 0:
                     continue
                 io_object.write(stdout)
@@ -192,7 +203,8 @@ if __name__ == "__main__":
     excludes = ['fuzzer', 'tests/test']
     scripts = ['schecker/tests/cocci-scripts/']
 
-    schecker = Schecker(paths, excludes=excludes, coccinelle_script_dirs=scripts)
+    schecker = Schecker(paths, excludes=excludes)
+    schecker.options_coccinelle(script_dirs=scripts)
 
     for filename in schecker.check(buf):
         print('check {}'.format(filename))
