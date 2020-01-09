@@ -6,7 +6,7 @@ with open(path.join(this_directory, 'README.md')) as f:
     long_description = f.read()
 
 setup(name='schecker',
-      version='0.1.0',
+      version='0.2.0',
       description='Simplify and wrap the use of clang-tidy and coccinelle',
       long_description=long_description,
       long_description_content_type='text/markdown',
