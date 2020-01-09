@@ -12,7 +12,6 @@ import tempfile
 import datetime
 import shutil
 
-from dataclasses import dataclass
 from typing import Iterator
 from typing import List
 from typing import Dict
@@ -38,6 +37,22 @@ TIDY_CHECKS += ',-clang-diagnostic-error'
 
 DEFAULT_OUTPUT_DIR = 'schecker-results'
 
+
+class Info:
+
+    def __init__(self, filepath_rel, filepath_abs):
+        self._filepath_rel = filepath_rel
+        self._filepath_abs = filepath_abs
+
+    @property
+    def filepath_rel(self) -> str:
+        return self._filepath_rel
+
+    @property
+    def filepath_abs(self) -> str:
+        return self._filepath_abs
+
+
 class ModClangTidy:
 
     def __init__(self):
@@ -53,6 +68,7 @@ class ModClangTidy:
         if len(stdout) >= 0:
             return "# {}\n{}".format(cmd, stdout)
         return ''
+
 
 class ModCoccinelle:
 
@@ -170,13 +186,14 @@ class Schecker:
 
     def check(self, io_object):
         for relpath, fullpath in self._each_file():
-            yield fullpath
+            info = Info(relpath, fullpath)
             for module_name, module in self._modules.items():
                 stdout = module.module.execute(relpath, fullpath)
                 if len(stdout) <= 0:
                     continue
                 io_object.write(stdout)
                 self._account_warning(relpath, stdout)
+            yield info
 
     def check_all(self, io_object):
         list(self.check(io_object))
@@ -206,7 +223,7 @@ if __name__ == "__main__":
     schecker = Schecker(paths, excludes=excludes)
     schecker.options_coccinelle(script_dirs=scripts)
 
-    for filename in schecker.check(buf):
-        print('check {}'.format(filename))
+    for file_info in schecker.check(buf):
+        print('check {}'.format(file_info.filepath_abs))
 
     print(buf.getvalue())
